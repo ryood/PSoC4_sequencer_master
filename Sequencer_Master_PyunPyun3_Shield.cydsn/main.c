@@ -11,15 +11,22 @@
 */
 #include <project.h>
 #include <stdio.h>
-//#include "ST7032.h"
 
-#define I2C_SLAVE_ADDRESS   (0x7f)
-#define I2C_RD_BUFFER_SIZE  (6u)
-#define I2C_WR_BUFFER_SIZE  (1u)
+// Sequencer
+//
+#define SEQUENCER_I2C_SLAVE_ADDRESS   (0x7f)
+#define SEQUENCER_I2C_RD_BUFFER_SIZE  (6u)
+#define SEQUENCER_I2C_WR_BUFFER_SIZE  (1u)
+
+// I2C LCD
+//
+#define LCD_I2C_SLAVE_ADDRESS   (0x3e)
+#define LCD_I2C_BUFFER_SIZE     (2u)
+#define LCD_I2C_PACKET_SIZE     (LCD_I2C_BUFFER_SIZE)
 
 /* Command valid status */
-#define TRANSFER_CMPLT    (0x00u)
-#define TRANSFER_ERROR    (0xFFu)
+#define I2C_TRANSFER_CMPLT    (0x00u)
+#define I2C_TRANSFER_ERROR    (0xFFu)
 
 /***************************************
 *               Macros
@@ -41,8 +48,8 @@
 /***************************************
 *               大域変数
 ****************************************/
-uint8 rdBuffer[I2C_RD_BUFFER_SIZE];
-uint8 wrBuffer[I2C_WR_BUFFER_SIZE] = {0};
+uint8 sequencerRdBuffer[SEQUENCER_I2C_RD_BUFFER_SIZE];
+uint8 sequencerWrBuffer[SEQUENCER_I2C_WR_BUFFER_SIZE] = {0};
 
 /*======================================================
  * Sequencer Board 
@@ -50,11 +57,15 @@ uint8 wrBuffer[I2C_WR_BUFFER_SIZE] = {0};
  *======================================================*/
 uint32 readSequencerBoard(void)
 {
-    uint32 status = TRANSFER_ERROR; 
+    uint32 status = I2C_TRANSFER_ERROR; 
     
     // Read from sequencer board
     //
-    I2CM_I2CMasterReadBuf(I2C_SLAVE_ADDRESS, rdBuffer, I2C_RD_BUFFER_SIZE, I2CM_I2C_MODE_COMPLETE_XFER);
+    I2CM_I2CMasterReadBuf(SEQUENCER_I2C_SLAVE_ADDRESS, 
+        sequencerRdBuffer,
+        SEQUENCER_I2C_RD_BUFFER_SIZE,
+        I2CM_I2C_MODE_COMPLETE_XFER
+    );
     while (0u == (I2CM_I2CMasterStatus() & I2CM_I2C_MSTAT_RD_CMPLT))
     {
         /* Waits until master completes read transfer */
@@ -66,9 +77,9 @@ uint32 readSequencerBoard(void)
         RGB_LED_ON_GREEN;
 
         /* Check if all bytes was written */
-        if (I2CM_I2CMasterGetReadBufSize() == I2C_RD_BUFFER_SIZE)
+        if (I2CM_I2CMasterGetReadBufSize() == SEQUENCER_I2C_RD_BUFFER_SIZE)
         {
-            status = TRANSFER_CMPLT;
+            status = I2C_TRANSFER_CMPLT;
         }
     }
     else
@@ -83,9 +94,13 @@ uint32 readSequencerBoard(void)
 
 uint32 writeSequencerBoard(void)
 {
-    uint32 status = TRANSFER_ERROR; 
+    uint32 status = I2C_TRANSFER_ERROR; 
     
-    I2CM_I2CMasterWriteBuf(I2C_SLAVE_ADDRESS, wrBuffer, I2C_WR_BUFFER_SIZE, I2CM_I2C_MODE_COMPLETE_XFER);
+    I2CM_I2CMasterWriteBuf(SEQUENCER_I2C_SLAVE_ADDRESS,
+        sequencerWrBuffer,
+        SEQUENCER_I2C_WR_BUFFER_SIZE,
+        I2CM_I2C_MODE_COMPLETE_XFER
+    );
     while (0u == (I2CM_I2CMasterStatus() & I2CM_I2C_MSTAT_WR_CMPLT))
     {
         /* Waits until master completes read transfer */
@@ -97,9 +112,9 @@ uint32 writeSequencerBoard(void)
         RGB_LED_ON_GREEN;
 
         /* Check if all bytes was written */
-        if (I2CM_I2CMasterGetWriteBufSize() == I2C_WR_BUFFER_SIZE)
+        if (I2CM_I2CMasterGetWriteBufSize() == SEQUENCER_I2C_WR_BUFFER_SIZE)
         {
-            status = TRANSFER_CMPLT;
+            status = I2C_TRANSFER_CMPLT;
         }
     }
     else
@@ -138,7 +153,7 @@ int main()
     
     /* Init I2C */
     I2CM_Start();
-    CyDelay(500);
+    CyDelay(1500);
     
     CyGlobalIntEnable;
     
@@ -149,22 +164,28 @@ int main()
     */
     
     for(;;)
-    {            
-        if (readSequencerBoard() == TRANSFER_CMPLT) {
+    {  
+        if (readSequencerBoard() == I2C_TRANSFER_CMPLT) {
             sprintf(uartBuffer, "%d %d %d %d %d %d ",
-                rdBuffer[0], rdBuffer[1], rdBuffer[2], rdBuffer[3], rdBuffer[4], rdBuffer[5]);
+                sequencerRdBuffer[0],
+                sequencerRdBuffer[1],
+                sequencerRdBuffer[2],
+                sequencerRdBuffer[3],
+                sequencerRdBuffer[4],
+                sequencerRdBuffer[5]
+            );
             UART_1_UartPutString(uartBuffer);
         }
         else {
-            UART_1_UartPutString("I2C Master Read Error.\r\n");
+            UART_1_UartPutString("I2C Master Sequencer Read Error.\r\n");
         }
         
-        if (writeSequencerBoard() == TRANSFER_CMPLT) {
-            sprintf(uartBuffer, "%d\r\n", wrBuffer[0]);
+        if (writeSequencerBoard() == I2C_TRANSFER_CMPLT) {
+            sprintf(uartBuffer, "%d\r\n", sequencerWrBuffer[0]);
             UART_1_UartPutString(uartBuffer);
         }
         else {
-            UART_1_UartPutString("I2C Master Write Error.\r\n");
+            UART_1_UartPutString("I2C Master Sequencer Write Error.\r\n");
         }
         
         // Increment Note Posisiton 
@@ -173,7 +194,7 @@ int main()
         if (wrBuffer[0] == 16)
            wrBuffer[0] = 0;
         */
-        wrBuffer[0] = inc_within_uint8(wrBuffer[0], 16, 0);
+        sequencerWrBuffer[0] = inc_within_uint8(sequencerWrBuffer[0], 16, 0);
         
         CyDelay(125);
     }
