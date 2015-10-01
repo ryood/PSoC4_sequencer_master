@@ -24,6 +24,8 @@
 #define LCD_I2C_BUFFER_SIZE     (2u)
 #define LCD_I2C_PACKET_SIZE     (LCD_I2C_BUFFER_SIZE)
 
+#define LCD_CONTRAST            (0b100000)
+
 /* Command valid status */
 #define I2C_TRANSFER_CMPLT    (0x00u)
 #define I2C_TRANSFER_ERROR    (0xFFu)
@@ -133,11 +135,6 @@ uint32 writeSequencerBoard(void)
  * LCD制御
  *              
  *======================================================*/
-/* LCDのコントラストの設定 */
-uint8 contrast = 0b011111;	// 3.0V時 数値を上げると濃くなります。
-							// 2.7Vでは0b111000くらいにしてください。。
-							// コントラストは電源電圧，温度によりかなり変化します。実際の液晶をみて調整してください。
-                
 uint32 LCD_Write(uint8 *buffer)
 {
 	uint32 status = I2C_TRANSFER_ERROR;
@@ -200,8 +197,8 @@ void LCD_Init()
 	LCD_Cmd(0b00111000);	// function set
 	LCD_Cmd(0b00111001);	// function set
 	LCD_Cmd(0b00010100);	// interval osc
-	LCD_Cmd(0b01110000 | (contrast & 0xF));	// contrast Low
-	LCD_Cmd(0b01011100 | ((contrast >> 4) & 0x3)); // contast High/icon/power
+	LCD_Cmd(0b01110000 | (LCD_CONTRAST & 0xF));	// contrast Low
+	LCD_Cmd(0b01011100 | ((LCD_CONTRAST >> 4) & 0x3)); // contast High/icon/power
 	LCD_Cmd(0b01101100); // follower control
 	CyDelay(300);
 	
@@ -229,6 +226,42 @@ void LCD_Puts(char8 *s)
 }
 
 /*======================================================
+ * Display Parameter on Char LCD
+ *
+ *======================================================*/
+void sequenceString(char *buffer, uint8 sequence1, uint8 sequence2)
+{
+    const char charOnOff[2] = { '.', 'o' };
+    int i;
+    
+    for (i = 0; i < 8; i++) {
+        buffer[i] = charOnOff[(sequence1 & (1 << i)) >> i];
+    }
+    for (i = 0; i < 8; i++) {
+        buffer[i + 8] = charOnOff[(sequence2 & (1 << i)) >> i];
+    }
+}
+
+void displaySequencerParameter()
+{
+    const char *strPlayStop[] = { "PLAY", "STOP" }; 
+    char lcdBuffer[17];
+
+    LCD_Clear();
+    sprintf(lcdBuffer, "%s %3d %3d %3d",
+        strPlayStop[sequencerRdBuffer[5]],
+        sequencerRdBuffer[3],
+        sequencerRdBuffer[2],
+        sequencerRdBuffer[4]    
+    );
+    LCD_Puts(lcdBuffer);
+
+    sequenceString(lcdBuffer, sequencerRdBuffer[0], sequencerRdBuffer[1]);
+    LCD_SetPos(0, 1);
+    LCD_Puts(lcdBuffer);
+}
+
+/*======================================================
  * Main Routine 
  *
  *======================================================*/
@@ -243,7 +276,6 @@ uint8 inc_within_uint8(uint8 x, uint8 h, uint8 l)
 int main()
 {
     char uartBuffer[80];
-    char lcdBuffer[16];
     
     UART_1_Start();    
     UART_1_UartPutString("Sequencer Board Test\r\n");
@@ -290,9 +322,7 @@ int main()
             UART_1_UartPutString("I2C Master Sequencer Write Error.\r\n");
         }
         
-        sprintf(lcdBuffer, "%d", sequencerWrBuffer[0]);
-        LCD_Clear();
-        LCD_Puts(lcdBuffer);
+        displaySequencerParameter();
         
         sequencerWrBuffer[0] = inc_within_uint8(sequencerWrBuffer[0], 16, 0);
         
