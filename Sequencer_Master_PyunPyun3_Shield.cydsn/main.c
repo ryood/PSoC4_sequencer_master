@@ -11,7 +11,7 @@
 */
 #include <project.h>
 #include <stdio.h>
-#include "ST7032.h"
+//#include "ST7032.h"
 
 #define I2C_SLAVE_ADDRESS   (0x7f)
 #define I2C_RD_BUFFER_SIZE  (6u)
@@ -137,9 +137,16 @@ int main()
     Pin_I2C_Reset_Write(1u);
     
     /* Init I2C */
-    I2CM_Start();   
+    I2CM_Start();
+    CyDelay(500);
     
     CyGlobalIntEnable;
+    
+    /*
+    LCD_Init(32);
+    LCD_Clear();
+	LCD_Puts("Sequencer Board");    
+    */
     
     for(;;)
     {            
